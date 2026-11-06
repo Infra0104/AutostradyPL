@@ -1,0 +1,42 @@
+name: Wappenverzeichnis aktualisieren
+
+on:
+  schedule:
+    - cron: "0 4 2 * *"      # monatlich am 2. um 04:00 UTC
+  workflow_dispatch:
+    inputs:
+      voiv:
+        description: "Woiwodschaft"
+        default: "malopolskie"
+      discover:
+        description: "Nur prüfen, welche Amtsblätter verfügbar sind (true/false)"
+        default: "false"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+      - name: Verzeichnis bauen
+        env:
+          CONTACT: ${{ vars.CONTACT || 'https://github.com/Infra0104/AutostradyPL' }}
+        run: |
+          ARGS="--voiv ${{ github.event.inputs.voiv || 'malopolskie' }}"
+          if [ "${{ github.event.inputs.discover }}" = "true" ]; then ARGS="$ARGS --discover"; fi
+          python scripts/build_index.py $ARGS || echo "exit=$?" >> $GITHUB_STEP_SUMMARY
+          cat data/report.md >> $GITHUB_STEP_SUMMARY || true
+      - name: Änderungen speichern
+        run: |
+          git config user.name "ik-herby bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add data
+          git diff --cached --quiet || git commit -m "Wappenverzeichnis aktualisiert $(date -u +%Y-%m-%d)"
+          git push
